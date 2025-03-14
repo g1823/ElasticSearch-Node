@@ -1,145 +1,4 @@
-## 安装
-
-​	Elasticsearch 的官方地址：https://www.elastic.co/cn/
-
-### windows下目录介绍
-
-| 目录    | 含义                                                |
-| ------- | --------------------------------------------------- |
-| bin     | 可执行脚本目录                                      |
-| config  | 配置目录                                            |
-| jdk     | 内置jdk目录(如果系统配置了JAVA_HOME，则使用系统JDK) |
-| lib     | 类库                                                |
-| logs    | 日志目录                                            |
-| modules | 模块目录                                            |
-| plugins | 插件目录                                            |
-
-### 启动以及注意项
-
-**启动：**bin目录下elasticsearch.bat文件为启动脚本。
-
-注意：
-
-​	9300 端口为 **Elasticsearch 集群间组件的通信** 端口。
-
-​	9200 端口为 **用户使用访问的** http协议的RESTful 端口。
-
-## ES存储格式
-
-### 存储格式介绍
-
-​	Elasticsearch 使用 **倒排索引**（inverted index）来存储和查找数据，但它的数据存储格式并不像传统的数据库那样直接存储行和列。
-
-​	数据以 **JSON 格式** 存储在 Elasticsearch 中，且每个文档都包含一个或多个字段。这些字段通常会被索引以便高效查询。
-
-**存储格式**：每个文档存储在一个内存结构中，通常以二进制的方式存储。实际存储内容通常包括：
-
-- **原始数据**：即文档的 JSON 内容，通常存储在 `_source` 字段中。
-- **倒排索引数据**：用于高效的查找和搜索。
-- **字段数据**：根据字段类型，存储字段的索引或聚合数据（如 `keyword` 类型字段）。
-- **其他元数据**：包括版本信息、文档 ID 等。
-
-#### 与MYSQL对比
-
-可以按照下图，将ES中的概念与关系型数据库做对比
-![1739339721771](images/2-ES%E5%85%A5%E9%97%A8/1739339721771.png)
-
-具体来说：
-
-1. **文档（Document）**：是 Elasticsearch 存储的基本单元，类似于数据库中的一行数据。每个文档都是一个 JSON 对象，包含多个字段。
-2. **索引（Index）**：是存储文档的地方，可以理解为数据库中的一个数据库表。一个索引由多个 **分片（Shard）** 和 **副本（Replica）** 组成。
-3. **字段（Field）**：是文档中的键值对，类似数据库表中的列。字段会根据配置是否进行索引（如 `text` 或 `keyword` 类型）来决定是否能够被全文搜索。
-4. **倒排索引（Inverted Index）**：是 Elasticsearch 用来加速搜索的一种数据结构，允许快速查找含有特定词语的文档。倒排索引记录了词项和包含这些词项的文档 ID。
-5. **类型（Type）**：相当于表，但是在7.X中这个概念已经被删除了。
-
-### 倒排索引和正常数据库索引
-
-​	倒排索引和传统数据库索引有本质的区别，主要体现在它们的结构和用途上。
-
-#### 1. **倒排索引（Inverted Index）**：
-
-倒排索引主要用于 **全文搜索**，其结构使得系统可以高效地找到包含特定词汇的文档。
-
-- **结构**：倒排索引会将每个词（或称为“词项”）与包含该词的文档 ID 进行关联。
-- **用途**：主要用于文本检索，如搜索引擎等需要查找包含某些关键词的文档的场景。
-
-倒排索引的构建过程通常包括以下步骤：
-
-1. **文档拆分**：将文档中的文本分解成词项（通常是单词或词组）。
-2. **建立词项到文档的映射**：每个词项与包含它的文档 ID 建立映射关系，生成倒排索引。
-
-#### 2. **传统数据库索引（B-tree、Hash Index）**：
-
-传统的关系型数据库索引（如 MySQL 使用的 B-tree 索引）主要用于 **快速查找特定值**，例如查找某一列等于某个值的记录。
-
-- **结构**：传统数据库索引一般使用 **B-tree** 或 **哈希表**。B-tree 索引用于对单个字段的值进行排序，并建立该字段与记录之间的快速访问路径。
-- **用途**：主要用于加速数据查询，如精确查找某个字段的值，或者范围查询（如查找大于某个值的所有记录）。
-
-#### 举个例子：
-
-假设我们有以下两个文档（JSON 格式）：
-
-- **文档 1**：`{ "id": 1, "content": "Elasticsearch is a distributed search engine" }`
-- **文档 2**：`{ "id": 2, "content": "Elasticsearch provides real-time search capabilities" }`
-- **文档 3**：`{ "id": 3, "content": "Search engines are used to search documents" }`
-
-##### **倒排索引**
-
-倒排索引的构建过程：
-
-- 将每个文档中的单词拆解：
-  - 文档 1：`Elasticsearch`, `is`, `a`, `distributed`, `search`, `engine`
-  - 文档 2：`Elasticsearch`, `provides`, `real-time`, `search`, `capabilities`
-  - 文档 3：`search`, `engines`, `are`, `used`, `to`, `documents`
-
-倒排索引表大概会是这样的：
-
-```rust
-"Elasticsearch" -> [1, 2]  (文档 1 和 2 中都包含 "Elasticsearch")
-"is" -> [1]
-"a" -> [1]
-"distributed" -> [1]
-"search" -> [1, 2, 3]  (文档 1、2 和 3 中都包含 "search")
-"engine" -> [1]
-"provides" -> [2]
-"real-time" -> [2]
-"capabilities" -> [2]
-"engines" -> [3]
-"are" -> [3]
-"used" -> [3]
-"to" -> [3]
-"documents" -> [3]
-```
-
-当你搜索词汇 `search` 时，倒排索引可以迅速告诉你它出现在哪些文档中：文档 1、2 和 3。这种索引结构在进行全文搜索时非常高效。
-
-##### **传统数据库索引（B-tree）**
-
-假设我们有一个简单的表格存储文档信息：
-
-| id   | content                                              |
-| ---- | ---------------------------------------------------- |
-| 1    | Elasticsearch is a distributed search engine         |
-| 2    | Elasticsearch provides real-time search capabilities |
-| 3    | Search engines are used to search documents          |
-
-如果我们在 `id` 列上建立了 B-tree 索引，那么索引会像这样组织：
-
-```ini
-id = 1 -> 文档 1
-id = 2 -> 文档 2
-id = 3 -> 文档 3
-```
-
-当你执行查询，如 `SELECT * FROM documents WHERE id = 2`，B-tree 索引会帮助数据库迅速找到 `id = 2` 这一行数据。
-
-#### **区别总结**：
-
-- **查询目的**：倒排索引用于全文搜索，可以快速查找某个词汇出现在哪些文档中；而传统数据库索引用于单个字段的值的查找，适用于精确查找、范围查询等。
-- **结构**：倒排索引是将词项和文档 ID 关联起来，而传统数据库索引通常会对字段值进行排序或使用哈希映射来加速查询。
-- **使用场景**：倒排索引适合用于文本搜索、关键词检索等场景，传统数据库索引适合用于范围查询、精确查找等场景。
-
-## 基础操作
+## 基础操作介绍
 
 ​	索引相当于数据库，创建索引就是创建一些数据库。
 
@@ -166,13 +25,13 @@ id = 3 -> 文档 3
 - **上传文档指定索引**：指定文档应该属于哪个索引，这个索引为文档提供了映射规则、分析器等配置。
 - **生成倒排索引**：文档上传后，文档字段会根据映射规则和分析器生成倒排索引，倒排索引是用来加速搜索的。
 
-### HTTP 操作
+## HTTP 操作
 
 ​	注意，ES默认启动后，9200端口为对外服务接口。
 
-#### 1、索引操作
+### 1、索引操作
 
-##### **1)** **创建索引** 
+#### **1)** **创建索引** 
 
 ​	对比关系型数据库，创建索引就等同于创建数据库。
 
@@ -180,17 +39,64 @@ id = 3 -> 文档 3
 
 请求类型：PUT
 
-请求地址：/{索引名称} 
+请求地址：/{索引名称}  # 注意，索引名称不能存在大写单词，可以用"_"来间隔
+
+请求体：
+
+​	请求时可以不携带请求体，则采用默认配置。
+
+其中，各个参数具体介绍：
+
+**settings**：设置索引的一些基本属性，比如分片数、复制数等。
+
+- `number_of_shards`: 定义索引的分片数量。
+- `number_of_replicas`: 定义索引的副本数量。
+
+**mappings**：定义索引中字段的属性。
+
+- **properties**：定义具体字段的属性，如字段的类型、分析器等。
+- 每个字段可以有不同的类型和设置。例如，`text` 字段适用于需要分词的文本数据，而 `keyword` 字段适用于不进行分词的精确匹配。
+
+~~~ json
+{
+  "settings": {
+    "number_of_shards": 3,  // 分片数量
+    "number_of_replicas": 2  // 副本数量
+  },
+  "mappings": {
+    "properties": {
+      "name": {
+        "type": "text",  // 文本字段，会进行分词
+        "analyzer": "standard"  // 使用标准分词器
+      },
+      "price": {
+        "type": "float",  // 数值字段，表示浮动数值
+        "index": true  // 该字段会被索引
+      },
+      "created_at": {
+        "type": "date",  // 日期字段
+        "format": "yyyy-MM-dd HH:mm:ss"  // 日期格式
+      },
+      "category": {
+        "type": "keyword",  // 精确匹配字段，不会分词
+        "index": true  // 该字段会被索引
+      }
+    }
+  }
+}
+~~~
+
+
 
 响应体：
 
-~~~ json
+```json
 {
 	"acknowledged": true, # 响应结果 true表示操作成功
 	"shards_acknowledged": true, # 分片结果 true表示操作成功
 	"index": "shopping" # 索引名称
 }
-~~~
+```
 
 例如：
 
@@ -198,17 +104,17 @@ id = 3 -> 文档 3
 
 响应体：
 
-~~~ json
+```json
 {
 	"acknowledged": true,
 	"shards_acknowledged": true,
 	"index": "shopping"
 }
-~~~
+```
 
 ​	再次创建索引shopping，就会创建失败，因为已经存在。
 
-~~~ json
+```json
 {
 	"error": {
 		"root_cause": [
@@ -226,9 +132,9 @@ id = 3 -> 文档 3
 	},
 	"status": 400
 }
-~~~
+```
 
-##### **2)** **查看所有索引**
+#### **2)** **查看所有索引**
 
 请求类型：GET
 
@@ -260,9 +166,9 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 响应体：
 
-![1739342953678](images/2-ES入门/1739342953678.png)
+![1739342953678](images/2-ES%E5%85%A5%E9%97%A8/1739342953678.png)
 
-##### **3)** **查看单个索引**
+#### **3)** **查看单个索引**
 
 请求类型：GET
 
@@ -291,7 +197,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 }
 ```
 
-##### **4)** **删除索引**
+#### **4)** **删除索引**
 
 请求类型：DELETE
 
@@ -299,15 +205,15 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 响应体：
 
-~~~ json
+```json
 {
 	"acknowledged": true # 删除成功
 }
-~~~
+```
 
 索引不存在，删除失败示例：
 
-~~~ json
+```json
 {
 	"error": {
 		"root_cause": [
@@ -329,11 +235,11 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 	},
 	"status": 404
 }
-~~~
+```
 
-#### 2、文档操作
+### 2、文档操作
 
-##### **1)** **创建文档** 
+#### **1)** **创建文档** 
 
 ​	索引已经创建好了，接下来我们来创建文档，并添加数据。
 
@@ -357,7 +263,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 响应体：
 
-~~~ json
+```json
 {
 	"_index": "shopping", # 索引名称
 	"_type": "_doc", # 类型，doc:文档类型
@@ -372,7 +278,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 	"_seq_no": 0,
 	"_primary_term": 1
 }
-~~~
+```
 
 例如：
 
@@ -390,7 +296,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 响应体
 
-~~~ json
+```json
 {
 	"_index": "shopping", # 索引名称
 	"_type": "_doc", # 类型，doc:文档类型
@@ -405,9 +311,9 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 	"_seq_no": 0,
 	"_primary_term": 1
 }
-~~~
+```
 
-##### **2)** **查看文档** 
+#### **2)** **查看文档** 
 
 ​	查看文档时，需要指明文档的唯一性标识，类似于 MySQL 中数据的主键查询
 
@@ -421,7 +327,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 响应体：
 
-~~~ json
+```json
 {
 	"_index": "shopping", # 索引名称
 	"_type": "_doc", # 类型，doc标识文档类型
@@ -436,9 +342,9 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 		"test": "test"
 	}
 }
-~~~
+```
 
-##### **3)** **修改文档** 
+#### **3)** **修改文档** 
 
 ​	和新增文档一样，输入相同的 URL 地址请求，如果请求体变化，会将原有的数据内容覆盖 
 
@@ -454,18 +360,18 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 ​	必须为json格式，例如：
 
-~~~ json
+```json
 {
     "title": "测试",
     "category": "123",
     "test": "test",
     "desc":"添加属性测试"
 }
-~~~
+```
 
 响应体
 
-~~~ json
+```json
 {
 	"_index": "shopping",
 	"_type": "_doc",
@@ -480,9 +386,9 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 	"_seq_no": 2,
 	"_primary_term": 1
 }
-~~~
+```
 
-##### **4)** **修改文档字段** 
+#### **4)** **修改文档字段** 
 
 ​	修改数据时，也可以只修改某一给条数据的局部信息
 
@@ -502,7 +408,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 ​	注意点2：如果文档中不存在某个字段，`_update` 操作会 **创建该字段**。
 
-~~~ json
+```json
 {
     "title": "测试",
     "category": "123",
@@ -515,11 +421,11 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
         "desc": "修改字段测试"
     }
 }
-~~~
+```
 
 响应体
 
-~~~ json
+```json
 {
 	"_index": "shopping",
 	"_type": "_doc",
@@ -534,9 +440,9 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 	"_seq_no": 3,
 	"_primary_term": 1
 }
-~~~
+```
 
-##### **5)** **删除文档** 
+#### **5)** **删除文档** 
 
 ​	删除一个文档不会立即从磁盘上移除，它只是被标记成已删除（逻辑删除）。
 
@@ -552,7 +458,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 响应体：
 
-~~~ json
+```json
 {
 	"_index": "shopping",
 	"_type": "_doc",
@@ -567,15 +473,15 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 	"_seq_no": 5,
 	"_primary_term": 1
 }
-~~~
+```
 
-##### **6)** **条件删除文档** 
+#### **6)** **条件删除文档** 
 
 ​	一般删除数据都是根据文档的唯一性标识进行删除，实际操作时，也可以根据条件对多条数据进行删除 。
 
 首先分别增加多条数据:
 
-~~~ json
+```json
 {
  "title":"测试",
  "category":"123",
@@ -587,7 +493,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
  "category":"123",
  "test":"test"
 }
-~~~
+```
 
 请求类型：POST
 
@@ -601,7 +507,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 ​	json格式
 
-~~~ json
+```json
 {
     "query": {
         "match": {
@@ -609,11 +515,11 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
         }
     }
 }
-~~~
+```
 
 响应体：
 
-~~~ json
+```json
 {
 	"took": 256,# 耗时
 	"timed_out": false,# 是否超时
@@ -631,9 +537,9 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 	"throttled_until_millis": 0,
 	"failures": []
 }
-~~~
+```
 
-#### 3、映射操作
+### 3、映射操作
 
 ​	有了索引库，等于有了数据库中的 database。
 
@@ -643,7 +549,7 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 ​	索引库也一样，需要知道这个类型下有哪些字段，每个字段有哪些约束信息，这就叫做映射(mapping)。
 
-##### **1)** 创建映射
+#### **1)** 创建映射
 
 ​	对比关系型数据库，创建索引就等同于创建数据库。
 
@@ -655,43 +561,30 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
 
 请求体：
 
-~~~ json
+```json
 {
-  "settings": {
-    "number_of_shards": 3,  // 分片数量
-    "number_of_replicas": 2  // 副本数量
-  },
-  "mappings": {
     "properties": {
-      "name": {
-        "type": "text",  // 文本字段，会进行分词
-        "analyzer": "standard"  // 使用标准分词器
-      },
-      "price": {
-        "type": "float",  // 数值字段，表示浮动数值
-        "index": true  // 该字段会被索引
-      },
-      "created_at": {
-        "type": "date",  // 日期字段
-        "format": "yyyy-MM-dd HH:mm:ss"  // 日期格式
-      },
-      "category": {
-        "type": "keyword",  // 精确匹配字段，不会分词
-        "index": true  // 该字段会被索引
-      }
+        "name": {
+            "type": "text", // 文本字段，会进行分词
+            "analyzer": "standard" // 使用标准分词器
+        },
+        "price": {
+            "type": "float", // 数值字段，表示浮动数值
+            "index": true // 该字段会被索引
+        },
+        "created_at": {
+            "type": "date", // 日期字段
+            "format": "yyyy-MM-dd HH:mm:ss" // 日期格式
+        },
+        "category": {
+            "type": "keyword", // 精确匹配字段，不会分词
+            "index": true // 该字段会被索引
+        }
     }
-  }
 }
-~~~
+```
 
 其中，各个参数具体介绍：
-
-**settings**：设置索引的一些基本属性，比如分片数、复制数等。
-
-- `number_of_shards`: 定义索引的分片数量。
-- `number_of_replicas`: 定义索引的副本数量。
-
-**mappings**：定义索引中字段的属性。
 
 - **properties**：定义具体字段的属性，如字段的类型、分析器等。
 
@@ -707,9 +600,209 @@ yellow open   shopping WP8DXtUgQHqZOnmDkqxHsQ   1   1          0            0   
   | **object**               | 用于存储 JSON 对象，可以包含多个字段。                     | ![1739417985961](images/2-ES入门/1739417985961.png) |
   | **nested**               | 用于存储嵌套对象，以便执行嵌套查询。                       | ![1739418003120](images/2-ES入门/1739418003120.png) |
 
-例如：
+#### 2) 查看映射
 
+请求类型：GET
 
+请求地址：/{索引名称}/_mapping 
+
+​	即 索引名称 + _mapping
+
+响应体：
+
+~~~ json
+{
+	"student": {
+		"mappings": {
+			"properties": {
+				"category": {
+					"type": "keyword"
+				},
+				"created_at": {
+					"type": "date",
+					"format": "yyyy-MM-dd HH:mm:ss"
+				},
+				"name": {
+					"type": "text",
+					"analyzer": "standard"
+				},
+				"price": {
+					"type": "float"
+				}
+			}
+		}
+	}
+}
+~~~
+
+#### 3) 索引映射关联
+
+​	即创建索引时同时创建映射，1、索引操作->1）创建索引中有相关请求
+
+### 4.查询
+
+#### 1）查询所有文档
+
+​	如上面介绍，文档都是上传到指定索引下，因此查询文档时，需要指定对应的索引。
+
+请求类型：GET
+
+请求地址：
+
+​	/{索引名称}/_search	
+
+​	即：索引名称 + _search	
+
+响应体：
+
+```json
+{
+	"took": 3,# 查询花费时间，单位毫秒
+	"timed_out": false, # 是否超时
+	"_shards": {# 分片信息
+		"total": 1,# 总数
+		"successful": 1,# 成功
+		"skipped": 0,# 忽略
+		"failed": 0# 失败
+	},
+	"hits": {# 搜索命中结果
+		"total": {# 搜索条件匹配的文档总数
+			"value": 2,# 总命中计数的值
+			"relation": "eq"# eq表示计数准确，gte表示计数不准确
+		},
+		"max_score": 1,
+		"hits": [# 命中结果集合
+			{
+				"_index": "shopping",
+				"_type": "_doc",
+				"_id": "02",
+				"_score": 1,
+				"_source": {
+					"title": "谢谢谢谢",
+					"category": "123",
+					"test": "test"
+				}
+			},
+			{
+				"_index": "shopping",
+				"_type": "_doc",
+				"_id": "01",
+				"_score": 1,
+				"_source": {
+					"title": "测试1",
+					"category": "123",
+					"test": "test"
+				}
+			}
+		]
+	}
+}
+
+```
+
+#### 2）各种类型查询
+
+​	match 匹配类型查询，会把查询条件进行分词，然后进行查询，多个词条之间是 or 的关系。
+
+请求类型：GET
+
+请求地址：
+
+​	/{索引名称}/_search	
+
+​	即：索引名称 + _search	
+
+请求体：
+
+​	这里get请求允许携带请求体，应该是ES的特殊操作，正常来说get请求不允许携带请求体。
+
+```json
+{
+    "_source": ["title", "category"],
+    "query": {
+        "match": {
+            "title": "谢谢谢谢"
+        }
+    },
+    "from": 0,
+    "size": 10
+}
+
+```
+
+其中各个参数含义：
+
+- query：查询部分，用于指定具体的查询条件。
+
+- from 和 size：用于分页控制，`from` 指定从哪一条数据开始，`size` 指定返回的文档数量。
+
+  - `from`: 查询结果的起始位置，默认是 0。
+  - `size`: 返回的文档数量，默认是 10。
+
+- _source：控制返回的字段，指定仅返回指定字段的内容。也可以通过下面两个属性来过滤字段。
+
+  - includes：来指定想要显示的字段 
+  - excludes：来指定不想要显示的字段
+
+  ![1739886122044](images/2-ES%E5%85%A5%E9%97%A8/1739886122044.png)
+
+- sort：用于排序文档
+  ![1739885919614](images/2-ES%E5%85%A5%E9%97%A8/1739885919614.png)
+
+- aggregations：用于对查询结果进行聚合（如统计、分组等）。这里aggregations可缩写为aggs.
+
+  跟sql一样，聚合函数有很多，例如max、min、avg
+  例如，计算 `price` 字段的平均值
+  ![1739885945901](images/2-ES%E5%85%A5%E9%97%A8/1739885945901.png)
+
+- match：是一个查询类型，表示全文搜索，并对字段进行分词。在这个例子中，`title`字段中的内容将与查询字符串 “谢谢谢谢” 进行匹配。
+  除了match还有其他查询类型
+
+  | 类型         | 作用                                                         | 示例                                                |
+  | ------------ | ------------------------------------------------------------ | --------------------------------------------------- |
+  | match        | 用于全文检索，自动对字段内容进行分词匹配。                   | ![1739885529474](images/2-ES入门/1739885529474.png) |
+  | term         | 用于精确匹配，不会分词，适用于 `keyword` 类型字段。          | ![1739885555578](images/2-ES入门/1739885555578.png) |
+  | range        | 用于范围查询，适合查询数值或日期范围。                       | ![1739885572973](images/2-ES入门/1739885572973.png) |
+  | bool         | 用于组合多个查询条件，支持 `must`（必须满足）、`should`（可以满足）、`must_not`（不能满足）等。 | ![1739885596800](images/2-ES入门/1739885596800.png) |
+  | match_phrase | 用于匹配短语，即查询必须完全按顺序匹配字段中的词。           | ![1739885614608](images/2-ES入门/1739885614608.png) |
+  | fuzzy        | 查询用于执行基于编辑距离的模糊匹配。它比较两个字符串之间的相似度，允许字符串中存在一定的拼写错误或不同。<br />它通过计算**Levenshtein 编辑距离**来确定两个字符串的差异（即需要多少次插入、删除或替换才能把一个字符串转换成另一个）。<br />**value**：查询的词，`phon` 是用户输入的模糊词。<br />**fuzziness**：指定允许的编辑距离，可以是具体的数字（如 1 或 2）或 `AUTO`（自动确定编辑距离，通常基于查询词的长度）。 | ![1739886418237](images/2-ES入门/1739886418237.png) |
+
+  响应体：
+
+  ```json
+  {
+  	"took": 1,
+  	"timed_out": false,
+  	"_shards": {
+  		"total": 1,
+  		"successful": 1,
+  		"skipped": 0,
+  		"failed": 0
+  	},
+  	"hits": {
+  		"total": {
+  			"value": 1,
+  			"relation": "eq"
+  		},
+  		"max_score": 4.57886,
+  		"hits": [
+  			{
+  				"_index": "shopping",
+  				"_type": "_doc",
+  				"_id": "02",
+  				"_score": 4.57886,
+  				"_source": {
+  					"title": "谢谢谢谢",
+  					"category": "123"
+  				}
+  			}
+  		]
+  	}
+  }
+  
+  ```
+
+  
 
 
 
